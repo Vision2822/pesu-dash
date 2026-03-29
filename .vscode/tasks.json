@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build & Install",
+      "type": "shell",
+      "command": ".\\gradlew.bat installDebug",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Build",
+      "type": "shell",
+      "command": ".\\gradlew.bat clean assembleDebug",
+      "problemMatcher": []
+    }
+  ]
+}

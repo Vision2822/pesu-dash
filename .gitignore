@@ -1,0 +1,31 @@
+# Built artifacts
+*.iml
+/build
+/app/build
+/captures
+
+# Gradle
+.gradle
+local.properties
+
+# IDE
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea/
+.DS_Store
+
+# Native
+.externalNativeBuild
+.cxx
+
+# Misc
+project_dump.txt
+a.bat
+ClassTracker/
+*.apk
+*.aab
+*.dex

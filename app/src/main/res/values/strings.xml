@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">PesuDash</string>
+    <string name="widget_description">Shows today\'s PESU classes with attendance status</string>
+</resources>
