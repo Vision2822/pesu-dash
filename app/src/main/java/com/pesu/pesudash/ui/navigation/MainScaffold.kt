@@ -30,24 +30,22 @@ import com.pesu.pesudash.ui.settings.SettingsScreen
 import com.pesu.pesudash.ui.sgpa.SgpaScreen
 import com.pesu.pesudash.ui.theme.AccentPresets
 import com.pesu.pesudash.ui.theme.AppTheme
-import com.pesu.pesudash.ui.theme.ThemeMode
 import com.pesu.pesudash.ui.theme.toThemeMode
 import com.pesu.pesudash.ui.today.TodayScreen
 import com.pesu.pesudash.ui.today.TodayViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 @Composable
 fun MainScaffold(
-    profile:      UserProfile,
-    sessionStore: SessionStore,
-    repository:   PesuRepository,
-    onLogout:     () -> Unit
+    profile:          UserProfile,
+    sessionStore:     SessionStore,
+    repository:       PesuRepository,
+    onLogout:         () -> Unit,
+    onSessionExpired: () -> Unit
 ) {
     val c        = AppTheme.colors
-    val scope    = CoroutineScope(Dispatchers.IO)
+    val scope    = rememberCoroutineScope()
     var currentTab  by remember { mutableStateOf(NavTab.HOME) }
     var previousTab by remember { mutableStateOf(NavTab.HOME) }
     val tabOrder = NavTab.entries

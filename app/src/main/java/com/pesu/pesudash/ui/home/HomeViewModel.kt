@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.pesu.pesudash.data.model.AttendanceSubject
 import com.pesu.pesudash.data.model.SeatingInfo
 import com.pesu.pesudash.data.model.TodayClass
+import com.pesu.pesudash.data.model.isOngoing
+import com.pesu.pesudash.data.model.isToday
+import com.pesu.pesudash.data.model.isTomorrow
 import com.pesu.pesudash.data.repository.PesuRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,9 +51,11 @@ class HomeViewModel(
                     catch (_: Exception) { emptyList() }
                 }
 
-                val schedule  = scheduleDeferred.await()
-                val seating   = seatingDeferred.await()
-                val subjects  = attendanceDeferred.await()
+                val schedule   = scheduleDeferred.await()
+                val seatingResult = seatingDeferred.await()
+                val subjects   = attendanceDeferred.await()
+
+                val seatingList = seatingResult.getOrElse { emptyList() }
 
                 val holidayName = schedule.holiday?.name
                 val isWeekend   = schedule.holiday == null && schedule.classes.isEmpty()
@@ -59,7 +64,7 @@ class HomeViewModel(
                 val totalPct          = subjects.mapNotNull { it.percentage }.sum()
                 val overallAttendance = if (subjects.isNotEmpty()) totalPct / subjects.size else 0f
 
-                val relevantSeating = seating
+                val relevantSeating = seatingList
                     .filter { it.isToday() || it.isTomorrow() || it.isOngoing() }
                     .sortedBy { it.testStartTime }
 

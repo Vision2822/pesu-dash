@@ -1,11 +1,12 @@
 package com.pesu.pesudash.ui.login
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.pesu.pesudash.data.local.SessionStore
 import com.pesu.pesudash.data.model.UserProfile
-import com.pesu.pesudash.data.network.AuthException
 import com.pesu.pesudash.data.network.PesuApiClient
+import com.pesu.pesudash.data.network.PesuError
 import com.pesu.pesudash.data.repository.PesuRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,11 +60,26 @@ class LoginViewModel(
                 sessionStore.saveProfile(profile, token)
                 _state.value = LoginUiState.Success(profile)
 
-            } catch (e: AuthException) {
+            } catch (e: PesuError.Auth) {
                 _state.value = LoginUiState.Error(e.message ?: "Login failed")
-            } catch (e: Exception) {
+            } catch (e: PesuError.Network) {
                 _state.value = LoginUiState.Error("Network error. Check your connection.")
+            } catch (e: Exception) {
+                _state.value = LoginUiState.Error("Something went wrong. Try again.")
             }
+        }
+    }
+
+    class Factory(
+        private val sessionStore: SessionStore,
+        private val repository: PesuRepository
+    ) : ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
+                @Suppress("UNCHECKED_CAST")
+                return LoginViewModel(sessionStore, repository) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
         }
     }
 }

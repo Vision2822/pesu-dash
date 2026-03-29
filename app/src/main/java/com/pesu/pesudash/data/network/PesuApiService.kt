@@ -1,18 +1,22 @@
 package com.pesu.pesudash.data.network
 
-import android.util.Log
+import com.pesu.pesudash.BuildConfig
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
 import com.pesu.pesudash.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.util.Log
 
 class PesuApiService {
 
     private val gson   = Gson()
     private val client = PesuApiClient.client
-    private val TAG    = "PesuApi"
+
+    companion object {
+        private const val TAG = "PesuApi"
+    }
 
     suspend fun initSession() = withContext(Dispatchers.IO) {
         val req = PesuApiClient.buildDispatcherRequest(
@@ -39,7 +43,7 @@ class PesuApiService {
             loginResp.close()
 
             if (statusCode != 302 || locationHeader.contains("login", ignoreCase = true)) {
-                throw AuthException("Invalid credentials")
+                throw PesuError.Auth("Invalid credentials")
             }
 
             val redirResp = PesuApiClient.loginClient.newCall(
@@ -50,17 +54,18 @@ class PesuApiService {
             val successResp = client.newCall(
                 PesuApiClient.buildGetRequest("mobile/mobileAppLoginSuccess")
             ).execute()
+
             val token = successResp.header("mobileAppAuthenticationToken")
-            val body  = successResp.body?.string() ?: throw AuthException("Empty response")
+            val body  = successResp.body?.string() ?: throw PesuError.Auth("Empty response")
             successResp.close()
 
             val user = try {
                 gson.fromJson(body, LoginResponse::class.java)
             } catch (e: Exception) {
-                throw AuthException("Failed to parse login response")
+                throw PesuError.Parse(e)
             }
 
-            if (user.login != "SUCCESS") throw AuthException("Login unsuccessful: ${user.login}")
+            if (user.login != "SUCCESS") throw PesuError.Auth("Login failed: ${user.login}")
 
             PesuApiClient.authToken = token
             user
@@ -77,6 +82,7 @@ class PesuApiService {
                 )
             )
             val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
             val body = resp.body?.string() ?: "[]"
             resp.close()
             val type = object : TypeToken<List<TimetableEntry>>() {}.type
@@ -99,6 +105,7 @@ class PesuApiService {
                 )
             )
             val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
             val body = resp.body?.string() ?: "[]"
             resp.close()
             val type = object : TypeToken<List<AttendanceSemester>>() {}.type
@@ -119,6 +126,7 @@ class PesuApiService {
             )
         )
         val resp = client.newCall(req).execute()
+        checkForSessionExpiry(resp.code)
         val body = resp.body?.string() ?: "{}"
         resp.close()
 
@@ -169,6 +177,7 @@ class PesuApiService {
             )
         )
         val resp = client.newCall(req).execute()
+        checkForSessionExpiry(resp.code)
         val body = resp.body?.string() ?: "[]"
         resp.close()
         val type = object : TypeToken<List<AttendanceDetail>>() {}.type
@@ -186,6 +195,7 @@ class PesuApiService {
                 )
             )
             val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
             val body = resp.body?.string() ?: "[]"
             resp.close()
             val type = object : TypeToken<List<CalendarEvent>>() {}.type
@@ -207,12 +217,15 @@ class PesuApiService {
                 )
             )
             val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
             val body = resp.body?.string() ?: "[]"
             resp.close()
-            Log.d(TAG, "SeatingInfo response: $body")
+            if (BuildConfig.DEBUG) Log.d(TAG, "SeatingInfo response: $body")
             val type = object : TypeToken<List<SeatingInfo>>() {}.type
             gson.fromJson<List<SeatingInfo>>(body, type) ?: emptyList()
         }
-}
 
-class AuthException(message: String) : Exception(message)
+    private fun checkForSessionExpiry(code: Int) {
+        if (code == 401 || code == 403) throw PesuError.SessionExpired
+    }
+}

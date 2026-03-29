@@ -1,10 +1,13 @@
 package com.pesu.pesudash.data.network
 
+import com.pesu.pesudash.BuildConfig
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
+import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 object PesuApiClient {
 
@@ -12,14 +15,28 @@ object PesuApiClient {
 
     val cookieJar = SessionCookieJar()
 
+    private val _authToken = AtomicReference<String?>(null)
+
+    var authToken: String?
+        get() = _authToken.get()
+        set(value) { _authToken.set(value) }
+
     private val logger = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.HEADERS
+        level = if (BuildConfig.DEBUG) {
+            HttpLoggingInterceptor.Level.HEADERS
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
     }
+
+    private val retryInterceptor = RetryInterceptor(maxRetries = 2)
 
     val client: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(cookieJar)
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .addInterceptor(retryInterceptor)
         .addInterceptor(logger)
         .build()
 
@@ -27,17 +44,16 @@ object PesuApiClient {
         .cookieJar(cookieJar)
         .followRedirects(false)
         .followSslRedirects(false)
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
         .addInterceptor(logger)
         .build()
-
-    var authToken: String? = null
 
     fun buildDispatcherRequest(params: Map<String, String>): Request {
         val formBuilder = FormBody.Builder()
         params.forEach { (k, v) -> formBuilder.add(k, v) }
-        formBuilder.add("randomNum", Math.random().toString())
+        formBuilder.add("randomNum", UUID.randomUUID().toString())
 
         val requestBuilder = Request.Builder()
             .url("$BASE_URL/mobile/dispatcher")
@@ -46,7 +62,7 @@ object PesuApiClient {
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/143.0 Mobile Safari/537.36")
             .header("X-Requested-With", "pes.pesu")
 
-        authToken?.let {
+        _authToken.get()?.let {
             requestBuilder.header("mobileAppAuthenticationToken", it)
         }
 
@@ -63,7 +79,7 @@ object PesuApiClient {
             .add("j_appId", "1")
             .add("action", "0")
             .add("mode", "0")
-            .add("randomNum", Math.random().toString())
+            .add("randomNum", UUID.randomUUID().toString())
             .build()
 
         return Request.Builder()
@@ -82,7 +98,7 @@ object PesuApiClient {
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/143.0 Mobile Safari/537.36")
             .header("X-Requested-With", "pes.pesu")
 
-        authToken?.let {
+        _authToken.get()?.let {
             requestBuilder.header("mobileAppAuthenticationToken", it)
         }
 
@@ -90,7 +106,7 @@ object PesuApiClient {
     }
 
     fun clearSession() {
-        authToken = null
+        _authToken.set(null)
         cookieJar.clear()
     }
 }

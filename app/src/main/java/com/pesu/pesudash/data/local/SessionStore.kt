@@ -2,6 +2,7 @@ package com.pesu.pesudash.data.local
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
@@ -20,42 +21,49 @@ class SessionStore(private val context: Context) {
     private val gson = Gson()
 
     companion object {
-        private val KEY_TOKEN        = stringPreferencesKey("auth_token")
-        private val KEY_USER_ID      = stringPreferencesKey("user_id")
-        private val KEY_NAME         = stringPreferencesKey("user_name")
-        private val KEY_SRN          = stringPreferencesKey("user_srn")
-        private val KEY_CLASS_NAME   = stringPreferencesKey("class_name")
-        private val KEY_BRANCH       = stringPreferencesKey("branch")
-        private val KEY_PROGRAM      = stringPreferencesKey("program")
-        private val KEY_PHOTO        = stringPreferencesKey("photo")
-        private val KEY_TIMETABLE    = stringPreferencesKey("timetable_cache")
-        private val KEY_SEMESTER     = stringPreferencesKey("semester_cache")
-        private val KEY_SUBJECTS     = stringPreferencesKey("subjects_cache")
-        private val KEY_CALENDAR     = stringPreferencesKey("calendar_cache")
-        private val KEY_ATTENDANCE   = stringPreferencesKey("attendance_cache")
-        private val KEY_TARGET_PCT   = stringPreferencesKey("target_pct")
-        private val KEY_SEM_END_DATE = stringPreferencesKey("sem_end_date")
+        private const val CURRENT_CACHE_VERSION = 1
 
-        private val KEY_THEME        = stringPreferencesKey("theme_mode")
-        private val KEY_ACCENT       = stringPreferencesKey("accent_color")
-
-        private val KEY_AVATAR_CACHE = stringPreferencesKey("avatar_cache")
+        private val KEY_CACHE_VERSION = intPreferencesKey("cache_version")
+        private val KEY_TOKEN         = stringPreferencesKey("auth_token")
+        private val KEY_USER_ID       = stringPreferencesKey("user_id")
+        private val KEY_NAME          = stringPreferencesKey("user_name")
+        private val KEY_SRN           = stringPreferencesKey("user_srn")
+        private val KEY_CLASS_NAME    = stringPreferencesKey("class_name")
+        private val KEY_BRANCH        = stringPreferencesKey("branch")
+        private val KEY_PROGRAM       = stringPreferencesKey("program")
+        private val KEY_PHOTO         = stringPreferencesKey("photo")
+        private val KEY_TIMETABLE     = stringPreferencesKey("timetable_cache")
+        private val KEY_SEMESTER      = stringPreferencesKey("semester_cache")
+        private val KEY_SUBJECTS      = stringPreferencesKey("subjects_cache")
+        private val KEY_CALENDAR      = stringPreferencesKey("calendar_cache")
+        private val KEY_ATTENDANCE    = stringPreferencesKey("attendance_cache")
+        private val KEY_TARGET_PCT    = stringPreferencesKey("target_pct")
+        private val KEY_SEM_END_DATE  = stringPreferencesKey("sem_end_date")
+        private val KEY_THEME         = stringPreferencesKey("theme_mode")
+        private val KEY_ACCENT        = stringPreferencesKey("accent_color")
+        private val KEY_AVATAR_CACHE  = stringPreferencesKey("avatar_cache")
+        private val KEY_SEATING_CACHE = stringPreferencesKey("seating_cache")
+        private val KEY_OFFLINE_MODE  = stringPreferencesKey("offline_mode")
     }
 
-    val authToken: Flow<String?> = context.dataStore.data.map { it[KEY_TOKEN] }
-    val userId:    Flow<String?> = context.dataStore.data.map { it[KEY_USER_ID] }
-    val userName:  Flow<String?> = context.dataStore.data.map { it[KEY_NAME] }
-    val srn:       Flow<String?> = context.dataStore.data.map { it[KEY_SRN] }
-    val className: Flow<String?> = context.dataStore.data.map { it[KEY_CLASS_NAME] }
-    val branch:    Flow<String?> = context.dataStore.data.map { it[KEY_BRANCH] }
-    val program:   Flow<String?> = context.dataStore.data.map { it[KEY_PROGRAM] }
-    val photo:     Flow<String?> = context.dataStore.data.map { it[KEY_PHOTO] }
-
-    val themeMode: Flow<String> = context.dataStore.data.map {
-        it[KEY_THEME] ?: "SYSTEM"
-    }
-
+    val authToken:  Flow<String?> = context.dataStore.data.map { it[KEY_TOKEN] }
+    val userId:     Flow<String?> = context.dataStore.data.map { it[KEY_USER_ID] }
+    val userName:   Flow<String?> = context.dataStore.data.map { it[KEY_NAME] }
+    val srn:        Flow<String?> = context.dataStore.data.map { it[KEY_SRN] }
+    val className:  Flow<String?> = context.dataStore.data.map { it[KEY_CLASS_NAME] }
+    val branch:     Flow<String?> = context.dataStore.data.map { it[KEY_BRANCH] }
+    val program:    Flow<String?> = context.dataStore.data.map { it[KEY_PROGRAM] }
+    val photo:      Flow<String?> = context.dataStore.data.map { it[KEY_PHOTO] }
+    val themeMode:  Flow<String>  = context.dataStore.data.map { it[KEY_THEME] ?: "SYSTEM" }
     val accentColor: Flow<String?> = context.dataStore.data.map { it[KEY_ACCENT] }
+
+    suspend fun validateCacheVersion() {
+        val version = context.dataStore.data.first()[KEY_CACHE_VERSION] ?: 0
+        if (version < CURRENT_CACHE_VERSION) {
+            clearAllCaches()
+            context.dataStore.edit { it[KEY_CACHE_VERSION] = CURRENT_CACHE_VERSION }
+        }
+    }
 
     suspend fun saveThemeMode(mode: String) {
         context.dataStore.edit { it[KEY_THEME] = mode }
@@ -162,6 +170,17 @@ class SessionStore(private val context: Context) {
         context.dataStore.edit { it[KEY_ATTENDANCE] = gson.toJson(cache) }
     }
 
+    suspend fun saveSeatingCache(list: List<Any>) {
+        context.dataStore.edit { it[KEY_SEATING_CACHE] = gson.toJson(list) }
+    }
+
+    suspend fun getSeatingCache(): String? =
+        context.dataStore.data.first()[KEY_SEATING_CACHE]
+
+    suspend fun clearSeatingCache() {
+        context.dataStore.edit { it.remove(KEY_SEATING_CACHE) }
+    }
+
     suspend fun getTargetPct(): Float {
         val raw = context.dataStore.data.first()[KEY_TARGET_PCT] ?: return 75f
         return raw.toFloatOrNull() ?: 75f
@@ -180,6 +199,10 @@ class SessionStore(private val context: Context) {
         context.dataStore.edit { it[KEY_SEM_END_DATE] = epochMs.toString() }
     }
 
+    suspend fun isOffline(): Boolean {
+        return context.dataStore.data.first()[KEY_OFFLINE_MODE] == "true"
+    }
+
     suspend fun clearAttendanceCache() {
         context.dataStore.edit { it.remove(KEY_ATTENDANCE) }
     }
@@ -191,6 +214,7 @@ class SessionStore(private val context: Context) {
             it.remove(KEY_SUBJECTS)
             it.remove(KEY_CALENDAR)
             it.remove(KEY_ATTENDANCE)
+            it.remove(KEY_SEATING_CACHE)
         }
     }
 

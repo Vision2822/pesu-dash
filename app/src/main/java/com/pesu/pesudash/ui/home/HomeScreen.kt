@@ -30,6 +30,9 @@ import com.pesu.pesudash.data.model.ClassStatus
 import com.pesu.pesudash.data.model.SeatingInfo
 import com.pesu.pesudash.data.model.TodayClass
 import com.pesu.pesudash.data.model.UserProfile
+import com.pesu.pesudash.data.model.isOngoing
+import com.pesu.pesudash.data.model.isToday
+import com.pesu.pesudash.data.model.isTomorrow
 import com.pesu.pesudash.ui.components.ShadcnBadge
 import com.pesu.pesudash.ui.components.ShadcnCard
 import com.pesu.pesudash.ui.theme.AppTheme

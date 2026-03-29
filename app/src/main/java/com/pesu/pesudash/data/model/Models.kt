@@ -1,7 +1,6 @@
 package com.pesu.pesudash.data.model
 
 import com.google.gson.annotations.SerializedName
-import java.util.Calendar
 
 data class LoginResponse(
     val login: String,
@@ -9,7 +8,6 @@ data class LoginResponse(
     val userName: String? = null,
     val name: String? = null,
     val srn: String? = null,
-
     val departmentId: String? = null,
     val loginId: String? = null,
     val className: String? = null,
@@ -141,30 +139,4 @@ data class SeatingInfo(
     @SerializedName("TestStartTime")  val testStartTime: Long,
     @SerializedName("RoomName")       val roomName: String,
     @SerializedName("SubjectCode")    val subjectCode: String
-) {
-    fun isToday(): Boolean {
-        val now     = System.currentTimeMillis()
-        val examCal = Calendar.getInstance().apply { timeInMillis = testStartTime }
-        val nowCal  = Calendar.getInstance()
-        val sameDay = nowCal.get(Calendar.YEAR) == examCal.get(Calendar.YEAR) &&
-                    nowCal.get(Calendar.DAY_OF_YEAR) == examCal.get(Calendar.DAY_OF_YEAR)
-
-        return sameDay && now < testEndTime
-    }
-
-    fun isTomorrow(): Boolean {
-        val now      = System.currentTimeMillis()
-        val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
-        val examCal  = Calendar.getInstance().apply { timeInMillis = testStartTime }
-        return tomorrow.get(Calendar.YEAR) == examCal.get(Calendar.YEAR) &&
-            tomorrow.get(Calendar.DAY_OF_YEAR) == examCal.get(Calendar.DAY_OF_YEAR) &&
-            now < testEndTime
-    }
-
-    fun isOngoing(): Boolean {
-        val now = System.currentTimeMillis()
-        return now in testStartTime..testEndTime
-    }
-
-    fun isUpcoming(): Boolean = testStartTime > System.currentTimeMillis()
-}
+)

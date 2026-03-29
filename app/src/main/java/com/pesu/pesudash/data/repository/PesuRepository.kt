@@ -6,6 +6,10 @@ import com.pesu.pesudash.data.local.SessionStore
 import com.pesu.pesudash.data.model.*
 import com.pesu.pesudash.data.network.PesuApiClient
 import com.pesu.pesudash.data.network.PesuApiService
+import com.pesu.pesudash.data.network.PesuError
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -15,6 +19,7 @@ class PesuRepository(
 ) {
 
     private val gson = Gson()
+    private val istTimeZone = TimeZone.getTimeZone("Asia/Kolkata")
 
     suspend fun login(username: String, password: String): LoginResponse {
         return api.login(username, password)
@@ -28,11 +33,23 @@ class PesuRepository(
         PesuApiClient.clearSession()
     }
 
-    suspend fun getSeatingInfo(userId: String): List<SeatingInfo> {
+    suspend fun getSeatingInfo(userId: String): Result<List<SeatingInfo>> {
         return try {
-            api.getSeatingInfo(userId)
+            val cached = sessionStore?.getSeatingCache()
+            if (cached != null) {
+                val type = object : TypeToken<List<SeatingInfo>>() {}.type
+                val list: List<SeatingInfo> = gson.fromJson(cached, type) ?: emptyList()
+                if (list.isNotEmpty()) return Result.success(list)
+            }
+            val fresh = api.getSeatingInfo(userId)
+            if (fresh.isNotEmpty()) {
+                sessionStore?.saveSeatingCache(fresh)
+            }
+            Result.success(fresh)
+        } catch (e: PesuError.SessionExpired) {
+            Result.failure(e)
         } catch (e: Exception) {
-            emptyList()
+            Result.failure(PesuError.Network(e))
         }
     }
 
@@ -62,12 +79,50 @@ class PesuRepository(
 
         val now     = Calendar.getInstance()
         val isToday = isSameDay(date, now)
-        val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(date.time)
+        val sdf     = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+            timeZone = istTimeZone
+        }
+        val dateStr = sdf.format(date.time)
 
-        val attendanceCache = if (sessionStore != null) {
-            sessionStore.getAttendanceCache().toMutableMap()
-        } else {
-            mutableMapOf()
+        val attendanceCache = sessionStore?.getAttendanceCache()?.toMutableMap()
+            ?: mutableMapOf()
+
+        val endedEntries = timetable.filter { entry ->
+            val startCal = parseTime(entry.startTime, date)
+            val endCal   = parseTime(entry.endTime, date)
+            when {
+                !isToday                                          -> false
+                now.before(startCal)                             -> false
+                now.after(startCal) && now.before(endCal)        -> false
+                else                                             -> true
+            }
+        }
+
+        val detailResults: Map<String, List<AttendanceDetail>> = coroutineScope {
+            endedEntries
+                .mapNotNull { entry ->
+                    val info = subjectInfoMap[entry.subjectCode] ?: return@mapNotNull null
+                    if (info.idType == null) return@mapNotNull null
+                    val cacheKey = "${entry.subjectCode}_$dateStr"
+                    val cached   = if (!forceRefresh) attendanceCache[cacheKey] else null
+                    if (cached?.status == ClassStatus.ATTENDED) return@mapNotNull null
+                    async {
+                        entry.subjectCode to api.getAttendanceDetail(
+                            userId              = userId,
+                            subjectId           = info.subjectId,
+                            idType              = info.idType,
+                            batchClassId        = info.batchClassId,
+                            classBatchSectionId = info.classBatchSectionId,
+                            attended            = null,
+                            total               = null,
+                            subjectCode         = info.subjectCode,
+                            subjectName         = entry.subjectName,
+                            percentage          = null
+                        )
+                    }
+                }
+                .awaitAll()
+                .toMap()
         }
 
         val result  = mutableListOf<TodayClass>()
@@ -76,14 +131,17 @@ class PesuRepository(
         for (entry in timetable) {
             val startCal = parseTime(entry.startTime, date)
             val endCal   = parseTime(entry.endTime, date)
-            val info     = subjectInfoMap[entry.subjectCode]
 
             val classEnded = when {
-                date.after(now) && !isToday -> false
-                isToday && now.before(startCal) -> false
-                isToday && now.after(startCal) && now.before(endCal) -> false
-                else -> true
+                !isToday                                         -> false
+                now.before(startCal)                            -> false
+                now.after(startCal) && now.before(endCal)       -> false
+                else                                            -> true
             }
+
+            val info     = subjectInfoMap[entry.subjectCode]
+            val cacheKey = "${entry.subjectCode}_$dateStr"
+            val cached   = if (!forceRefresh) attendanceCache[cacheKey] else null
 
             val status: ClassStatus
             var attended = 0
@@ -100,57 +158,41 @@ class PesuRepository(
                 !classEnded -> {
                     status = ClassStatus.UPCOMING
                 }
+                cached?.status == ClassStatus.ATTENDED -> {
+                    status   = ClassStatus.ATTENDED
+                    attended = cached.attendedCount
+                    total    = cached.totalCount
+                    pct      = cached.percentage
+                }
+                info == null || info.idType == null -> {
+                    status = ClassStatus.NOT_MARKED
+                }
                 else -> {
-                    val cacheKey = "${entry.subjectCode}_$dateStr"
-                    val cached   = if (!forceRefresh) attendanceCache[cacheKey] else null
+                    val details = detailResults[entry.subjectCode] ?: emptyList()
+                    val record  = details.find { detail ->
+                        val d = sdf.format(Date(detail.dateOfAttendance))
+                        d == dateStr
+                    }
 
-                    if (cached != null && cached.status == ClassStatus.ATTENDED) {
-                        status   = ClassStatus.ATTENDED
-                        attended = cached.attendedCount
-                        total    = cached.totalCount
-                        pct      = cached.percentage
-                    } else if (info == null || info.idType == null) {
-                        status = ClassStatus.NOT_MARKED
-                    } else {
-                        val details = api.getAttendanceDetail(
-                            userId              = userId,
-                            subjectId           = info.subjectId,
-                            idType              = info.idType,
-                            batchClassId        = info.batchClassId,
-                            classBatchSectionId = info.classBatchSectionId,
-                            attended            = null,
-                            total               = null,
-                            subjectCode         = info.subjectCode,
-                            subjectName         = entry.subjectName,
-                            percentage          = null
+                    attended = details.count { it.status == 1 }
+                    total    = details.size
+                    pct      = if (total > 0) (attended.toFloat() / total) * 100f else 0f
+
+                    status = when {
+                        record == null     -> ClassStatus.NOT_MARKED
+                        record.status == 1 -> ClassStatus.ATTENDED
+                        else               -> ClassStatus.BUNKED
+                    }
+
+                    if (status == ClassStatus.ATTENDED) {
+                        updated[cacheKey] = CachedAttendanceRecord(
+                            subjectCode   = entry.subjectCode,
+                            dateStr       = dateStr,
+                            status        = status,
+                            attendedCount = attended,
+                            totalCount    = total,
+                            percentage    = pct
                         )
-
-                        val record = details.find { detail ->
-                            val d = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                .format(Date(detail.dateOfAttendance))
-                            d == dateStr
-                        }
-
-                        attended = details.count { it.status == 1 }
-                        total    = details.size
-                        pct      = if (total > 0) (attended.toFloat() / total) * 100f else 0f
-
-                        status = when {
-                            record == null     -> ClassStatus.NOT_MARKED
-                            record.status == 1 -> ClassStatus.ATTENDED
-                            else               -> ClassStatus.BUNKED
-                        }
-
-                        if (status == ClassStatus.ATTENDED) {
-                            updated[cacheKey] = CachedAttendanceRecord(
-                                subjectCode   = entry.subjectCode,
-                                dateStr       = dateStr,
-                                status        = status,
-                                attendedCount = attended,
-                                totalCount    = total,
-                                percentage    = pct
-                            )
-                        }
                     }
                 }
             }
