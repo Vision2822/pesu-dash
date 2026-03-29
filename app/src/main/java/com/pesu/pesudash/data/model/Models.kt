@@ -67,7 +67,8 @@ enum class ClassStatus {
     BUNKED,
     UPCOMING,
     ONGOING,
-    NOT_MARKED
+    NOT_MARKED,
+    UNMARKED
 }
 
 data class TodayClass(

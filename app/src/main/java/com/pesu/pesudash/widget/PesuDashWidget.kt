@@ -90,6 +90,7 @@ private fun statusColor(status: ClassStatus): ColorProvider = when (status) {
     ClassStatus.UPCOMING   -> YellowColor
     ClassStatus.ONGOING    -> BlueColor
     ClassStatus.NOT_MARKED -> OrangeColor
+    ClassStatus.UNMARKED   -> DimFg
 }
 
 private fun statusLabel(status: ClassStatus): String = when (status) {
@@ -98,6 +99,7 @@ private fun statusLabel(status: ClassStatus): String = when (status) {
     ClassStatus.UPCOMING   -> "Upcoming"
     ClassStatus.ONGOING    -> "Ongoing"
     ClassStatus.NOT_MARKED -> "Pending"
+    ClassStatus.UNMARKED   -> "Unmarked"
 }
 
 private fun formatTime(time: String): String {

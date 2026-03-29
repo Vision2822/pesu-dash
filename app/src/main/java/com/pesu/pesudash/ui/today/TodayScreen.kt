@@ -520,6 +520,7 @@ fun ClassCard(cls: TodayClass, modifier: Modifier = Modifier) {
         ClassStatus.UPCOMING   -> c.yellow to "Upcoming"
         ClassStatus.ONGOING    -> c.blue   to "Ongoing"
         ClassStatus.NOT_MARKED -> c.orange to "Pending"
+        ClassStatus.UNMARKED   -> c.dimFg  to "Unmarked"
     }
 
     ShadcnCard(modifier = modifier) {

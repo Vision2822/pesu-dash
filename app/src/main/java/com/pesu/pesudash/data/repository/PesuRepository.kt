@@ -57,8 +57,8 @@ class PesuRepository(
         forceRefresh: Boolean = false
     ): TodaySchedule {
 
-        val calendar = getCalendarEvents(userId, forceRefresh)
-        val holiday  = isHolidayDate(calendar, date)
+        val calendarEvents = getCalendarEvents(userId, forceRefresh)
+        val holiday        = isHolidayDate(calendarEvents, date)
         if (holiday != null) return TodaySchedule(classes = emptyList(), holiday = holiday)
 
         val dayOfWeek = getPesuDayOfWeek(date)
@@ -77,7 +77,9 @@ class PesuRepository(
 
         val now     = Calendar.getInstance()
         val isToday = isSameDay(date, now)
-        val sdf     = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+        val isPast  = date.before(now) && !isToday
+
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
             timeZone = istTimeZone
         }
         val dateStr = sdf.format(date.time)
@@ -86,14 +88,8 @@ class PesuRepository(
             ?: mutableMapOf()
 
         val endedEntries = timetable.filter { entry ->
-            val startCal = parseTime(entry.startTime, date)
-            val endCal   = parseTime(entry.endTime, date)
-            when {
-                !isToday                                   -> false
-                now.before(startCal)                       -> false
-                now.after(startCal) && now.before(endCal)  -> false
-                else                                       -> true
-            }
+            val endCal = parseTime(entry.endTime, date)
+            now.after(endCal)
         }
 
         val detailResults: Map<String, List<AttendanceDetail>> = coroutineScope {
@@ -127,19 +123,21 @@ class PesuRepository(
         val updated = mutableMapOf<String, CachedAttendanceRecord>()
 
         for (entry in timetable) {
-            val startCal = parseTime(entry.startTime, date)
-            val endCal   = parseTime(entry.endTime, date)
+            val startCal  = parseTime(entry.startTime, date)
+            val endCal    = parseTime(entry.endTime, date)
+            val cacheKey  = "${entry.subjectCode}_$dateStr"
+            val cached    = if (!forceRefresh) attendanceCache[cacheKey] else null
+            val info      = subjectInfoMap[entry.subjectCode]
 
-            val classEnded = when {
-                !isToday                                   -> false
-                now.before(startCal)                       -> false
-                now.after(startCal) && now.before(endCal)  -> false
-                else                                       -> true
+            val classStarted = now.after(startCal)
+            val classEnded   = now.after(endCal)
+
+            val within24Hrs  = run {
+                val deadline = (endCal.clone() as Calendar).apply {
+                    add(Calendar.HOUR_OF_DAY, 24)
+                }
+                now.before(deadline)
             }
-
-            val info     = subjectInfoMap[entry.subjectCode]
-            val cacheKey = "${entry.subjectCode}_$dateStr"
-            val cached   = if (!forceRefresh) attendanceCache[cacheKey] else null
 
             val status: ClassStatus
             var attended = 0
@@ -147,24 +145,25 @@ class PesuRepository(
             var pct      = 0f
 
             when {
-                !classEnded && isToday && now.before(startCal) -> {
+                !classStarted -> {
                     status = ClassStatus.UPCOMING
                 }
-                !classEnded && isToday && now.after(startCal) && now.before(endCal) -> {
+
+                classStarted && !classEnded -> {
                     status = ClassStatus.ONGOING
                 }
-                !classEnded -> {
-                    status = ClassStatus.UPCOMING
-                }
+
                 cached?.status == ClassStatus.ATTENDED -> {
                     status   = ClassStatus.ATTENDED
                     attended = cached.attendedCount
                     total    = cached.totalCount
                     pct      = cached.percentage
                 }
+
                 info == null || info.idType == null -> {
-                    status = ClassStatus.NOT_MARKED
+                    status = if (within24Hrs) ClassStatus.NOT_MARKED else ClassStatus.UNMARKED
                 }
+
                 else -> {
                     val details = detailResults[entry.subjectCode] ?: emptyList()
                     val record  = details.find { detail ->
@@ -177,9 +176,10 @@ class PesuRepository(
                     pct      = if (total > 0) (attended.toFloat() / total) * 100f else 0f
 
                     status = when {
-                        record == null     -> ClassStatus.NOT_MARKED
-                        record.status == 1 -> ClassStatus.ATTENDED
-                        else               -> ClassStatus.BUNKED
+                        record == null && within24Hrs  -> ClassStatus.NOT_MARKED
+                        record == null && !within24Hrs -> ClassStatus.UNMARKED
+                        record!!.status == 1           -> ClassStatus.ATTENDED
+                        else                           -> ClassStatus.BUNKED
                     }
 
                     if (status == ClassStatus.ATTENDED) {

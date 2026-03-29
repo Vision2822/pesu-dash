@@ -656,6 +656,7 @@ private fun CompactClassRow(cls: TodayClass) {
         ClassStatus.UPCOMING   -> c.yellow to "Upcoming"
         ClassStatus.ONGOING    -> c.blue   to "Ongoing"
         ClassStatus.NOT_MARKED -> c.orange to "Pending"
+        ClassStatus.UNMARKED   -> c.dimFg  to "Unmarked"
     }
     Row(
         modifier = Modifier
