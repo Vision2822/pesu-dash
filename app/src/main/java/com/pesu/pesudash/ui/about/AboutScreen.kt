@@ -2,6 +2,7 @@ package com.pesu.pesudash.ui.about
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,12 +41,15 @@ import com.pesu.pesudash.ui.theme.Inter
 @Composable
 fun AboutScreen(
     sessionStore:       SessionStore,
-    currentVersionName: String  = "1.0",
-    currentVersionCode: Int     = 1,
+    currentVersionName: String   = "1.0",
+    currentVersionCode: Int      = 1,
     modifier:           Modifier = Modifier
 ) {
     val vm: AboutViewModel = viewModel(
-        factory = AboutViewModel.Factory(sessionStore)
+        factory = AboutViewModel.Factory(
+            sessionStore        = sessionStore,
+            currentVersionCode  = currentVersionCode
+        )
     )
     val state by vm.state.collectAsStateWithLifecycle()
     val c     = AppTheme.colors
@@ -63,21 +67,18 @@ fun AboutScreen(
             .padding(horizontal = 16.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-
         Column(
             modifier            = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-
-            androidx.compose.foundation.Image(
+            Image(
                 painter            = painterResource(id = R.drawable.logo),
                 contentDescription = "PesuDash",
                 modifier           = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(18.dp))
             )
-
             Text(
                 text       = "PesuDash",
                 fontFamily = Inter,
@@ -85,7 +86,6 @@ fun AboutScreen(
                 fontSize   = 22.sp,
                 color      = c.foreground
             )
-
             ShadcnBadge(
                 text  = "v$currentVersionName",
                 color = c.blue
@@ -112,12 +112,12 @@ fun AboutScreen(
             is AboutUiState.Error -> {
                 ShadcnCard {
                     Text(
-                        text      = " Couldn't load info: ${s.message}",
+                        text       = "Couldn't load info: ${s.message}",
                         fontFamily = Inter,
-                        fontSize  = 13.sp,
-                        color     = c.red,
-                        textAlign = TextAlign.Center,
-                        modifier  = Modifier.fillMaxWidth()
+                        fontSize   = 13.sp,
+                        color      = c.red,
+                        textAlign  = TextAlign.Center,
+                        modifier   = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(12.dp))
                     ShadcnButton(
@@ -130,8 +130,9 @@ fun AboutScreen(
             }
 
             is AboutUiState.Success -> {
-                val meta       = s.meta
-                val avatarUrls = s.avatarUrls
+                val meta        = s.meta
+                val avatarUrls  = s.avatarUrls
+                val updateState = s.updateState
 
                 if (meta.tagline.isNotBlank()) {
                     Text(
@@ -144,14 +145,22 @@ fun AboutScreen(
                     )
                 }
 
-                if (meta.latestVersionCode > currentVersionCode) {
-                    ShadcnCard(onClick = { openUrl(meta.releasesLink) }) {
-                        Row(
-                            modifier              = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment     = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                if (updateState.hasUpdate) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(c.green.copy(alpha = 0.08f))
+                            .border(1.dp, c.green.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                            .clickable { openUrl(updateState.releasesLink) }
+                            .padding(16.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier              = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment     = Alignment.CenterVertically
+                            ) {
                                 Text(
                                     text       = "Update available",
                                     fontFamily = Inter,
@@ -159,24 +168,33 @@ fun AboutScreen(
                                     fontSize   = 14.sp,
                                     color      = c.green
                                 )
+                                ShadcnBadge(text = "v${updateState.latestVersion}", color = c.green)
+                            }
+                            if (updateState.changelog.isNotBlank()) {
                                 Text(
-                                    text       = "v${meta.latestVersionName} — ${meta.changelog}",
+                                    text       = updateState.changelog,
                                     fontFamily = Inter,
                                     fontSize   = 12.sp,
                                     color      = c.mutedFg,
-                                    maxLines   = 2,
+                                    lineHeight = 18.sp,
+                                    maxLines   = 4,
                                     overflow   = TextOverflow.Ellipsis
                                 )
                             }
-                            Spacer(Modifier.width(8.dp))
-                            ShadcnBadge(text = "New", color = c.green)
+                            Text(
+                                text       = "Tap to download →",
+                                fontFamily = Inter,
+                                fontSize   = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color      = c.green
+                            )
                         }
                     }
                 }
 
-                if (meta.changelog.isNotBlank()) {
+                if (meta.changelog.isNotBlank() && !updateState.hasUpdate) {
                     ShadcnCard {
-                        SectionLabel(text = "What's new in v${meta.latestVersionName}")
+                        SectionLabel(text = "WHAT'S NEW IN V${meta.latestVersionName}")
                         Spacer(Modifier.height(10.dp))
                         Text(
                             text       = meta.changelog,
@@ -189,7 +207,7 @@ fun AboutScreen(
                 }
 
                 ShadcnCard {
-                    SectionLabel(text = "Created by")
+                    SectionLabel(text = "CREATED BY")
                     Spacer(Modifier.height(12.dp))
                     PersonRow(
                         name      = meta.creatorName,
@@ -204,7 +222,7 @@ fun AboutScreen(
 
                 if (meta.contributors.isNotEmpty()) {
                     ShadcnCard {
-                        SectionLabel(text = "Contributors")
+                        SectionLabel(text = "CONTRIBUTORS")
                         Spacer(Modifier.height(12.dp))
                         meta.contributors.forEachIndexed { index, contributor ->
                             PersonRow(
@@ -226,7 +244,7 @@ fun AboutScreen(
                 }
 
                 ShadcnCard {
-                    SectionLabel(text = "Links")
+                    SectionLabel(text = "LINKS")
                     Spacer(Modifier.height(12.dp))
                     LinkRow(
                         label   = "GitHub Repository",
@@ -293,7 +311,6 @@ private fun PersonRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier              = Modifier.weight(1f)
         ) {
-
             Box(
                 modifier         = Modifier
                     .size(40.dp)

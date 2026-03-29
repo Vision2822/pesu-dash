@@ -41,7 +41,8 @@ data class TimetableEntry(
 data class AttendanceSemester(
     val batchClassId: Int,
     val classBatchSectionId: Int,
-    val className: String
+    val className: String,
+    val batchClassOrder: Long = 0L
 )
 
 data class AttendanceSubject(
@@ -139,4 +140,98 @@ data class SeatingInfo(
     @SerializedName("TestStartTime")  val testStartTime: Long,
     @SerializedName("RoomName")       val roomName: String,
     @SerializedName("SubjectCode")    val subjectCode: String
+)
+
+data class StudentSemester(
+    @SerializedName("StudentId")       val studentId: String,
+    @SerializedName("BatchClassId")    val batchClassId: Int,
+    @SerializedName("ProgramId")       val programId: Int,
+    @SerializedName("Description")     val description: String?,
+    @SerializedName("ClassessId")      val classesId: Int,
+    @SerializedName("ClassName")       val className: String,
+    @SerializedName("SGPA")            val sgpa: String?,
+    @SerializedName("CGPA")            val cgpa: String?,
+    @SerializedName("ClassStatus")     val classStatus: Int,
+    @SerializedName("BatchClassOrder") val batchClassOrder: Long,
+    @SerializedName("SemesterStatus")  val semesterStatus: String?
+)
+
+data class IsaMarkEntry(
+    @SerializedName("StudentId")           val studentId: String?,
+    @SerializedName("LoginId")             val loginId: String?,
+    @SerializedName("subjectId")           val subjectId: Int,
+    @SerializedName("subjectCode")         val subjectCode: String,
+    @SerializedName("subjectName")         val subjectName: String,
+    @SerializedName("Credits")             val credits: Double,
+    @SerializedName("marks")               val marks: String?,
+    @SerializedName("ISAMaster")           val isaMaster: String?,
+    @SerializedName("ISAMarksMasterId")    val isaMarksMasterId: Any?,
+    @SerializedName("CutoffMarks")         val cutoffMarks: Double?,
+    @SerializedName("maxISAMarks")         val maxIsaMarks: Double?,
+    @SerializedName("OrderBy")             val orderBy: Int?,
+    @SerializedName("batchClassId")        val batchClassId: Int?,
+    @SerializedName("classBatchSectionId") val classBatchSectionId: String?
+)
+
+data class EsaResultEntry(
+    @SerializedName("esaresultsid")  val esaResultsId: Long,
+    @SerializedName("loginId")       val loginId: String?,
+    @SerializedName("srn")           val srn: String?,
+    @SerializedName("subjectCode")   val subjectCode: String,
+    @SerializedName("subjectName")   val subjectName: String?,
+    @SerializedName("subjectOrder")  val subjectOrder: Int,
+    @SerializedName("grade")         val grade: String,
+    @SerializedName("semester")      val semester: String?,
+    @SerializedName("info")          val info: String?,
+    @SerializedName("status")        val status: Int?
+)
+
+data class SemesterGradeResult(
+    @SerializedName("subjectCode")  val subjectCode: String,
+    @SerializedName("Semester")     val semester: Int,
+    @SerializedName("grade")        val grade: String,
+    @SerializedName("SubjectName")  val subjectName: String,
+    @SerializedName("EarnedCredit") val earnedCredit: Double,
+    @SerializedName("Credits")      val credits: Double,
+    @SerializedName("EsaId")        val esaId: Int,
+    @SerializedName("Description")  val description: String?,
+    @SerializedName("SubjectId")    val subjectId: Int
+)
+
+data class CgpaSemesterWise(
+    @SerializedName("StudentId")     val studentId: String?,
+    @SerializedName("EsaId")         val esaId: Int?,
+    @SerializedName("Grade")         val grade: String?,
+    @SerializedName("Semester")      val semester: String?,
+    @SerializedName("BatchClassId")  val batchClassId: Int?,
+    @SerializedName("Description")   val description: String?,
+    @SerializedName("EarnedCredits") val earnedCredits: String?,
+    @SerializedName("Credits")       val credits: String?,
+    @SerializedName("SGPA")          val sgpa: String?,
+    @SerializedName("CGPA")          val cgpa: String?
+)
+
+data class SemesterResultSummary(
+    val semester: StudentSemester,
+    val grades: List<SemesterGradeResult>,
+    val cgpaInfo: CgpaSemesterWise?,
+    val isaMarks: Map<String, List<IsaMarkEntry>>,
+    val esaResults: List<EsaResultEntry>
+)
+
+data class SubjectResultView(
+    val subjectCode: String,
+    val subjectName: String,
+    val credits: Double,
+    val grade: String?,
+    val earnedCredits: Double?,
+    val isaBreakdown: List<IsaBreakdownItem>
+)
+
+data class IsaBreakdownItem(
+    val assessmentName: String,
+    val marks: String?,
+    val maxMarks: Double?,
+    val cutoff: Double?,
+    val orderBy: Int
 )

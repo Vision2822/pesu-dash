@@ -26,8 +26,9 @@ import com.pesu.pesudash.ui.attendance.AttendanceScreen
 import com.pesu.pesudash.ui.attendance.AttendanceViewModel
 import com.pesu.pesudash.ui.home.HomeScreen
 import com.pesu.pesudash.ui.home.HomeViewModel
+import com.pesu.pesudash.ui.results.ResultsScreen
+import com.pesu.pesudash.ui.results.ResultsViewModel
 import com.pesu.pesudash.ui.settings.SettingsScreen
-import com.pesu.pesudash.ui.sgpa.SgpaScreen
 import com.pesu.pesudash.ui.theme.AccentPresets
 import com.pesu.pesudash.ui.theme.AppTheme
 import com.pesu.pesudash.ui.theme.toThemeMode
@@ -83,6 +84,10 @@ fun MainScaffold(
                 return AttendanceViewModel(repository, sessionStore) as T
             }
         }
+    )
+
+    val resultsVm = viewModel<ResultsViewModel>(
+        factory = ResultsViewModel.Factory(repository)
     )
 
     Scaffold(
@@ -146,14 +151,17 @@ fun MainScaffold(
                     modifier  = Modifier.padding(padding)
                 )
 
-                NavTab.SGPA -> SgpaScreen(
-                    modifier = Modifier.padding(padding)
+                NavTab.SGPA -> ResultsScreen(
+                    viewModel = resultsVm,
+                    userId    = profile.userId,
+                    usn       = profile.srn,
+                    modifier  = Modifier.padding(padding)
                 )
 
                 NavTab.ABOUT -> AboutScreen(
                     sessionStore       = sessionStore,
-                    currentVersionName = "1.0",
-                    currentVersionCode = 1,
+                    currentVersionName = "1.1",
+                    currentVersionCode = 2,
                     modifier           = Modifier.padding(padding)
                 )
 

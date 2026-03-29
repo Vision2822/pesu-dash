@@ -112,6 +112,29 @@ class PesuApiService {
             gson.fromJson(body, type) ?: emptyList()
         }
 
+    suspend fun getAttendanceSemestersFull(userId: String): List<AttendanceSemester> =
+        withContext(Dispatchers.IO) {
+            val req = PesuApiClient.buildDispatcherRequest(
+                mapOf(
+                    "action"        to "18",
+                    "mode"          to "1",
+                    "whichObjectId" to "clickHome_footer_attendance",
+                    "title"         to "Attendance",
+                    "userId"        to userId,
+                    "deviceType"    to "1",
+                    "serverMode"    to "0",
+                    "programId"     to "1",
+                    "redirectValue" to "redirect:/a/ad"
+                )
+            )
+            val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
+            val body = resp.body?.string() ?: "[]"
+            resp.close()
+            val type = object : TypeToken<List<AttendanceSemester>>() {}.type
+            gson.fromJson(body, type) ?: emptyList()
+        }
+
     suspend fun getAttendanceSummary(
         userId: String,
         batchClassId: Int
@@ -224,6 +247,120 @@ class PesuApiService {
             val type = object : TypeToken<List<SeatingInfo>>() {}.type
             gson.fromJson<List<SeatingInfo>>(body, type) ?: emptyList()
         }
+
+    suspend fun getResultSemesters(usn: String): Pair<List<StudentSemester>, Boolean> =
+        withContext(Dispatchers.IO) {
+            val req = PesuApiClient.buildDispatcherRequest(
+                mapOf(
+                    "action"     to "7",
+                    "mode"       to "10",
+                    "usn"        to usn,
+                    "callMethod" to "background"
+                )
+            )
+            val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
+            val body = resp.body?.string() ?: "{}"
+            resp.close()
+
+            val json = gson.fromJson(body, JsonObject::class.java)
+            val arr  = json.getAsJsonArray("StudentSemester")
+            val type = object : TypeToken<List<StudentSemester>>() {}.type
+            val semesters: List<StudentSemester> = if (arr != null) gson.fromJson(arr, type) else emptyList()
+            val isProvisional = json.get("isprovisional")?.asBoolean ?: false
+            semesters to isProvisional
+        }
+
+    suspend fun getIsaMarks(
+        userId: String,
+        batchClassId: Int,
+        classBatchSectionId: Int
+    ): Map<String, List<IsaMarkEntry>> = withContext(Dispatchers.IO) {
+        val req = PesuApiClient.buildDispatcherRequest(
+            mapOf(
+                "action"              to "6",
+                "mode"                to "9",
+                "batchClassId"        to batchClassId.toString(),
+                "classBatchSectionId" to classBatchSectionId.toString(),
+                "fetchId"             to "$batchClassId-$classBatchSectionId",
+                "userId"              to userId
+            )
+        )
+        val resp = client.newCall(req).execute()
+        checkForSessionExpiry(resp.code)
+        val body = resp.body?.string() ?: "{}"
+        resp.close()
+
+        val json = gson.fromJson(body, JsonObject::class.java) ?: return@withContext emptyMap()
+        val result = mutableMapOf<String, List<IsaMarkEntry>>()
+        val entryType = object : TypeToken<List<IsaMarkEntry>>() {}.type
+
+        for (key in json.keySet()) {
+            val arr = json.getAsJsonArray(key) ?: continue
+            val entries: List<IsaMarkEntry> = gson.fromJson(arr, entryType) ?: emptyList()
+            if (entries.isNotEmpty()) result[key] = entries
+        }
+        result
+    }
+
+    suspend fun getEsaResults(usn: String): List<EsaResultEntry> =
+        withContext(Dispatchers.IO) {
+            val req = PesuApiClient.buildDispatcherRequest(
+                mapOf(
+                    "action" to "7",
+                    "mode"   to "3",
+                    "USN"    to usn
+                )
+            )
+            val resp = client.newCall(req).execute()
+            checkForSessionExpiry(resp.code)
+            val body = resp.body?.string() ?: "{}"
+            resp.close()
+
+            val json = gson.fromJson(body, JsonObject::class.java)
+            val arr  = json.getAsJsonArray("results") ?: return@withContext emptyList()
+            val type = object : TypeToken<List<EsaResultEntry>>() {}.type
+            gson.fromJson(arr, type) ?: emptyList()
+        }
+
+    suspend fun getSemesterGrades(
+        batchClassId: Int,
+        classesId: Int,
+        userId: String,
+        usn: String,
+        className: String,
+        isFinalised: Boolean
+    ): Pair<List<SemesterGradeResult>, CgpaSemesterWise?> = withContext(Dispatchers.IO) {
+        val req = PesuApiClient.buildDispatcherRequest(
+            mapOf(
+                "action"              to "7",
+                "mode"                to "7",
+                "BatchClassId"        to batchClassId.toString(),
+                "ClassBatchSectionId" to "undefined",
+                "ClassessId"          to classesId.toString(),
+                "UserId"              to userId,
+                "usn"                 to usn,
+                "ClassName"           to className,
+                "isFinalised"         to if (isFinalised) "1" else "0"
+            )
+        )
+        val resp = client.newCall(req).execute()
+        checkForSessionExpiry(resp.code)
+        val body = resp.body?.string() ?: "{}"
+        resp.close()
+
+        val json = gson.fromJson(body, JsonObject::class.java)
+
+        val resultsArr  = json.getAsJsonArray("RESULTS")
+        val resultsType = object : TypeToken<List<SemesterGradeResult>>() {}.type
+        val grades: List<SemesterGradeResult> = if (resultsArr != null) gson.fromJson(resultsArr, resultsType) else emptyList()
+
+        val cgpaArr  = json.getAsJsonArray("CGPA_SEMESTERWISE")
+        val cgpaType = object : TypeToken<List<CgpaSemesterWise>>() {}.type
+        val cgpaList: List<CgpaSemesterWise> = if (cgpaArr != null) gson.fromJson(cgpaArr, cgpaType) else emptyList()
+
+        grades to cgpaList.firstOrNull()
+    }
 
     private fun checkForSessionExpiry(code: Int) {
         if (code == 401 || code == 403) throw PesuError.SessionExpired

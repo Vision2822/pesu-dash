@@ -16,18 +16,18 @@ private const val META_URL =
     "https://raw.githubusercontent.com/Vision2822/pesu-dash/main/app_meta.json"
 
 data class AppMeta(
-    val appName: String               = "PesuDash",
-    val tagline: String               = "",
-    val creatorName: String           = "Prajval",
-    val creatorGithub: String         = "",
-    val creatorRole: String           = "",
+    val appName: String                 = "PesuDash",
+    val tagline: String                 = "",
+    val creatorName: String             = "Prajval",
+    val creatorGithub: String           = "",
+    val creatorRole: String             = "",
     val contributors: List<Contributor> = emptyList(),
-    val repoLink: String              = "",
-    val releasesLink: String          = "",
-    val bugReportLink: String         = "",
-    val latestVersionName: String     = "",
-    val latestVersionCode: Int        = 0,
-    val changelog: String             = ""
+    val repoLink: String                = "",
+    val releasesLink: String            = "",
+    val bugReportLink: String           = "",
+    val latestVersionName: String       = "",
+    val latestVersionCode: Int          = 0,
+    val changelog: String               = ""
 )
 
 data class Contributor(
@@ -36,17 +36,26 @@ data class Contributor(
     val role: String
 )
 
+data class UpdateState(
+    val hasUpdate: Boolean      = false,
+    val latestVersion: String   = "",
+    val changelog: String       = "",
+    val releasesLink: String    = ""
+)
+
 sealed class AboutUiState {
     object Loading : AboutUiState()
     data class Success(
         val meta: AppMeta,
-        val avatarUrls: Map<String, String> = emptyMap()
+        val avatarUrls: Map<String, String> = emptyMap(),
+        val updateState: UpdateState        = UpdateState()
     ) : AboutUiState()
     data class Error(val message: String) : AboutUiState()
 }
 
 class AboutViewModel(
-    private val sessionStore: SessionStore
+    private val sessionStore: SessionStore,
+    private val currentVersionCode: Int
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<AboutUiState>(AboutUiState.Loading)
@@ -88,6 +97,11 @@ class AboutViewModel(
                 val linksJson  = json.getJSONObject("links")
                 val latestJson = json.getJSONObject("latest_version")
 
+                val latestCode = latestJson.optInt("code", 1)
+                val latestName = latestJson.optString("name")
+                val changelog  = latestJson.optString("changelog")
+                val releases   = linksJson.optString("releases")
+
                 val meta = AppMeta(
                     appName           = json.optString("app_name", "PesuDash"),
                     tagline           = json.optString("tagline", ""),
@@ -96,30 +110,35 @@ class AboutViewModel(
                     creatorRole       = creatorJson.optString("role"),
                     contributors      = contributors,
                     repoLink          = linksJson.optString("repo"),
-                    releasesLink      = linksJson.optString("releases"),
+                    releasesLink      = releases,
                     bugReportLink     = linksJson.optString("report_bug"),
-                    latestVersionName = latestJson.optString("name"),
-                    latestVersionCode = latestJson.optInt("code", 1),
-                    changelog         = latestJson.optString("changelog")
+                    latestVersionName = latestName,
+                    latestVersionCode = latestCode,
+                    changelog         = changelog
+                )
+
+                val updateState = UpdateState(
+                    hasUpdate     = latestCode > currentVersionCode,
+                    latestVersion = latestName,
+                    changelog     = changelog,
+                    releasesLink  = releases
                 )
 
                 val storedAvatars = sessionStore.getAvatarCache().toMutableMap()
-
-                val usernames = mutableListOf<String>()
+                val usernames     = mutableListOf<String>()
                 creatorJson.optString("github").githubUsername()?.let { usernames.add(it) }
                 contributors.forEach { it.github.githubUsername()?.let { u -> usernames.add(u) } }
-
                 usernames.forEach { username ->
                     if (!storedAvatars.containsKey(username)) {
                         storedAvatars[username] = "https://github.com/$username.png?size=128"
                     }
                 }
-
                 sessionStore.saveAvatarCache(storedAvatars)
 
                 _state.value = AboutUiState.Success(
-                    meta       = meta,
-                    avatarUrls = storedAvatars
+                    meta        = meta,
+                    avatarUrls  = storedAvatars,
+                    updateState = updateState
                 )
 
             } catch (e: Exception) {
@@ -134,10 +153,13 @@ class AboutViewModel(
         }
     }
 
-    class Factory(private val sessionStore: SessionStore) : ViewModelProvider.Factory {
+    class Factory(
+        private val sessionStore: SessionStore,
+        private val currentVersionCode: Int
+    ) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             @Suppress("UNCHECKED_CAST")
-            return AboutViewModel(sessionStore) as T
+            return AboutViewModel(sessionStore, currentVersionCode) as T
         }
     }
 }

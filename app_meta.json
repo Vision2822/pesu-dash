@@ -1,21 +1,20 @@
 {
-  "app_name": "PESU Dash",
-  "version": "1.0",
-  "tagline": "Your PESU academic companion",
+  "app_name": "PesuDash",
+  "tagline": "Your PESU companion",
   "creator": {
     "name": "Prajval",
     "github": "https://github.com/Vision2822",
-    "role": "Developer & Designer"
+    "role": "Developer"
   },
   "contributors": [],
   "links": {
-    "releases": "https://github.com/Vision2822/pesu-dash/releases",
     "repo": "https://github.com/Vision2822/pesu-dash",
+    "releases": "https://github.com/Vision2822/pesu-dash/releases",
     "report_bug": "https://github.com/Vision2822/pesu-dash/issues"
   },
   "latest_version": {
-    "code": 1,
-    "name": "1.0",
-    "changelog": "Initial release"
+    "name": "1.1",
+    "code": 2,
+    "changelog": "- Added Results screen with ISA and ESA tabs\n- Fixed session expiry handling\n- Performance improvements"
   }
 }

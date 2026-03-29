@@ -18,7 +18,7 @@ class PesuRepository(
     private val sessionStore: SessionStore? = null
 ) {
 
-    private val gson = Gson()
+    private val gson        = Gson()
     private val istTimeZone = TimeZone.getTimeZone("Asia/Kolkata")
 
     suspend fun login(username: String, password: String): LoginResponse {
@@ -42,9 +42,7 @@ class PesuRepository(
                 if (list.isNotEmpty()) return Result.success(list)
             }
             val fresh = api.getSeatingInfo(userId)
-            if (fresh.isNotEmpty()) {
-                sessionStore?.saveSeatingCache(fresh)
-            }
+            if (fresh.isNotEmpty()) sessionStore?.saveSeatingCache(fresh)
             Result.success(fresh)
         } catch (e: PesuError.SessionExpired) {
             Result.failure(e)
@@ -91,17 +89,17 @@ class PesuRepository(
             val startCal = parseTime(entry.startTime, date)
             val endCal   = parseTime(entry.endTime, date)
             when {
-                !isToday                                          -> false
-                now.before(startCal)                             -> false
-                now.after(startCal) && now.before(endCal)        -> false
-                else                                             -> true
+                !isToday                                   -> false
+                now.before(startCal)                       -> false
+                now.after(startCal) && now.before(endCal)  -> false
+                else                                       -> true
             }
         }
 
         val detailResults: Map<String, List<AttendanceDetail>> = coroutineScope {
             endedEntries
                 .mapNotNull { entry ->
-                    val info = subjectInfoMap[entry.subjectCode] ?: return@mapNotNull null
+                    val info     = subjectInfoMap[entry.subjectCode] ?: return@mapNotNull null
                     if (info.idType == null) return@mapNotNull null
                     val cacheKey = "${entry.subjectCode}_$dateStr"
                     val cached   = if (!forceRefresh) attendanceCache[cacheKey] else null
@@ -133,10 +131,10 @@ class PesuRepository(
             val endCal   = parseTime(entry.endTime, date)
 
             val classEnded = when {
-                !isToday                                         -> false
-                now.before(startCal)                            -> false
-                now.after(startCal) && now.before(endCal)       -> false
-                else                                            -> true
+                !isToday                                   -> false
+                now.before(startCal)                       -> false
+                now.after(startCal) && now.before(endCal)  -> false
+                else                                       -> true
             }
 
             val info     = subjectInfoMap[entry.subjectCode]
@@ -222,19 +220,48 @@ class PesuRepository(
         return TodaySchedule(classes = result)
     }
 
-    suspend fun getCalendarEventsPublic(userId: String): List<CalendarEvent> {
-        return getCalendarEvents(userId, forceRefresh = false)
-    }
+    suspend fun getCalendarEventsPublic(userId: String): List<CalendarEvent> =
+        getCalendarEvents(userId, forceRefresh = false)
 
-    suspend fun getFullTimetable(userId: String): List<TimetableEntry> {
-        return getTimetable(userId, dayOfWeek = 1, forceRefresh = false)
-    }
+    suspend fun getFullTimetable(userId: String): List<TimetableEntry> =
+        getTimetable(userId, dayOfWeek = 1, forceRefresh = false)
 
     suspend fun getAttendanceSummary(userId: String): List<AttendanceSubject> {
         val semester = getSemester(userId, forceRefresh = false) ?: return emptyList()
         getSubjectInfoMap(userId, semester, forceRefresh = false)
         val summary = api.getAttendanceSummary(userId, semester.batchClassId)
         return summary.values.toList()
+    }
+
+    suspend fun getAttendanceSemestersFull(userId: String): List<AttendanceSemester> {
+        return api.getAttendanceSemestersFull(userId)
+    }
+
+    suspend fun getResultSemesters(usn: String): Pair<List<StudentSemester>, Boolean> {
+        return api.getResultSemesters(usn)
+    }
+
+    suspend fun getIsaMarks(
+        userId: String,
+        batchClassId: Int,
+        classBatchSectionId: Int
+    ): Map<String, List<IsaMarkEntry>> {
+        return api.getIsaMarks(userId, batchClassId, classBatchSectionId)
+    }
+
+    suspend fun getEsaResults(usn: String): List<EsaResultEntry> {
+        return api.getEsaResults(usn)
+    }
+
+    suspend fun getSemesterGrades(
+        batchClassId: Int,
+        classesId: Int,
+        userId: String,
+        usn: String,
+        className: String,
+        isFinalised: Boolean
+    ): Pair<List<SemesterGradeResult>, CgpaSemesterWise?> {
+        return api.getSemesterGrades(batchClassId, classesId, userId, usn, className, isFinalised)
     }
 
     private suspend fun getCalendarEvents(
@@ -327,10 +354,8 @@ class PesuRepository(
 
     private fun isHolidayDate(events: List<CalendarEvent>, date: Calendar): CalendarEvent? {
         val dayStart = (date.clone() as Calendar).apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         val dayEnd = dayStart + 24 * 60 * 60 * 1000L
         return events.firstOrNull {
