@@ -160,8 +160,8 @@ fun MainScaffold(
 
                 NavTab.ABOUT -> AboutScreen(
                     sessionStore       = sessionStore,
-                    currentVersionName = "1.1",
-                    currentVersionCode = 2,
+                    currentVersionName = "1.2",
+                    currentVersionCode = 3,
                     modifier           = Modifier.padding(padding)
                 )
 
