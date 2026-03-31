@@ -44,6 +44,7 @@ class SessionStore(private val context: Context) {
         private val KEY_AVATAR_CACHE  = stringPreferencesKey("avatar_cache")
         private val KEY_SEATING_CACHE = stringPreferencesKey("seating_cache")
         private val KEY_OFFLINE_MODE  = stringPreferencesKey("offline_mode")
+        private val KEY_SELECTED_SEM = stringPreferencesKey("selected_semester_cache")
     }
 
     val authToken:  Flow<String?> = context.dataStore.data.map { it[KEY_TOKEN] }
@@ -201,6 +202,17 @@ class SessionStore(private val context: Context) {
 
     suspend fun isOffline(): Boolean {
         return context.dataStore.data.first()[KEY_OFFLINE_MODE] == "true"
+    }
+
+    suspend fun saveSelectedSemester(json: String) {
+        context.dataStore.edit { it[KEY_SELECTED_SEM] = json }
+    }
+
+    suspend fun getSelectedSemester(): String? =
+        context.dataStore.data.first()[KEY_SELECTED_SEM]
+
+    suspend fun clearSelectedSemester() {
+        context.dataStore.edit { it.remove(KEY_SELECTED_SEM) }
     }
 
     suspend fun clearAttendanceCache() {

@@ -1,6 +1,6 @@
 {
   "app_name": "PesuDash",
-  "tagline": "Your PESU companion",
+  "tagline": "Your unofficial PESU companion",
   "creator": {
     "name": "Prajval",
     "github": "https://github.com/Vision2822",
@@ -13,8 +13,8 @@
     "report_bug": "https://github.com/Vision2822/pesu-dash/issues"
   },
   "latest_version": {
-    "name": "1.1",
-    "code": 2,
-    "changelog": "- Added Results screen with ISA and ESA tabs\n- Fixed session expiry handling\n- Performance improvements"
+    "name": "1.2",
+    "code": 3,
+    "changelog": "- Semester selector in attendance tab so you can switch between semesters manually\n- Fixed timetable showing wrong status for past dates\n- Attendance marked mid-class now correctly shows Present instead of Ongoing\n- Added Unmarked status for classes where professor marking window has closed\n- Pending status now accurately tracks the 24 hour marking window"
   }
 }

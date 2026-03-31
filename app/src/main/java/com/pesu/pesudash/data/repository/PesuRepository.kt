@@ -77,7 +77,6 @@ class PesuRepository(
 
         val now     = Calendar.getInstance()
         val isToday = isSameDay(date, now)
-        val isPast  = date.before(now) && !isToday
 
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
             timeZone = istTimeZone
@@ -87,13 +86,13 @@ class PesuRepository(
         val attendanceCache = sessionStore?.getAttendanceCache()?.toMutableMap()
             ?: mutableMapOf()
 
-        val endedEntries = timetable.filter { entry ->
-            val endCal = parseTime(entry.endTime, date)
-            now.after(endCal)
+        val needsAttendanceFetch = timetable.filter { entry ->
+            val startCal = parseTime(entry.startTime, date)
+            now.after(startCal)
         }
 
         val detailResults: Map<String, List<AttendanceDetail>> = coroutineScope {
-            endedEntries
+            needsAttendanceFetch
                 .mapNotNull { entry ->
                     val info     = subjectInfoMap[entry.subjectCode] ?: return@mapNotNull null
                     if (info.idType == null) return@mapNotNull null
@@ -123,16 +122,16 @@ class PesuRepository(
         val updated = mutableMapOf<String, CachedAttendanceRecord>()
 
         for (entry in timetable) {
-            val startCal  = parseTime(entry.startTime, date)
-            val endCal    = parseTime(entry.endTime, date)
-            val cacheKey  = "${entry.subjectCode}_$dateStr"
-            val cached    = if (!forceRefresh) attendanceCache[cacheKey] else null
-            val info      = subjectInfoMap[entry.subjectCode]
+            val startCal = parseTime(entry.startTime, date)
+            val endCal   = parseTime(entry.endTime, date)
+            val cacheKey = "${entry.subjectCode}_$dateStr"
+            val cached   = if (!forceRefresh) attendanceCache[cacheKey] else null
+            val info     = subjectInfoMap[entry.subjectCode]
 
             val classStarted = now.after(startCal)
             val classEnded   = now.after(endCal)
 
-            val within24Hrs  = run {
+            val within24Hrs = run {
                 val deadline = (endCal.clone() as Calendar).apply {
                     add(Calendar.HOUR_OF_DAY, 24)
                 }
@@ -150,7 +149,33 @@ class PesuRepository(
                 }
 
                 classStarted && !classEnded -> {
-                    status = ClassStatus.ONGOING
+                    val details = detailResults[entry.subjectCode] ?: emptyList()
+                    val record  = details.find { detail ->
+                        val d = sdf.format(Date(detail.dateOfAttendance))
+                        d == dateStr
+                    }
+                    when {
+                        record != null && record.status == 1 -> {
+                            attended = details.count { it.status == 1 }
+                            total    = details.size
+                            pct      = if (total > 0) (attended.toFloat() / total) * 100f else 0f
+                            status   = ClassStatus.ATTENDED
+                            updated[cacheKey] = CachedAttendanceRecord(
+                                subjectCode   = entry.subjectCode,
+                                dateStr       = dateStr,
+                                status        = ClassStatus.ATTENDED,
+                                attendedCount = attended,
+                                totalCount    = total,
+                                percentage    = pct
+                            )
+                        }
+                        record != null && record.status == 0 -> {
+                            status = ClassStatus.BUNKED
+                        }
+                        else -> {
+                            status = ClassStatus.ONGOING
+                        }
+                    }
                 }
 
                 cached?.status == ClassStatus.ATTENDED -> {
@@ -230,6 +255,14 @@ class PesuRepository(
         val semester = getSemester(userId, forceRefresh = false) ?: return emptyList()
         getSubjectInfoMap(userId, semester, forceRefresh = false)
         val summary = api.getAttendanceSummary(userId, semester.batchClassId)
+        return summary.values.toList()
+    }
+
+    suspend fun getAttendanceSummaryForSemester(
+        userId: String,
+        batchClassId: Int
+    ): List<AttendanceSubject> {
+        val summary = api.getAttendanceSummary(userId, batchClassId)
         return summary.values.toList()
     }
 

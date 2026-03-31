@@ -3,9 +3,11 @@ package com.pesu.pesudash.ui.attendance
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -19,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.pesu.pesudash.data.model.AttendanceSemester
 import com.pesu.pesudash.data.model.AttendanceSubject
 import com.pesu.pesudash.ui.components.ShadcnCard
 import com.pesu.pesudash.ui.theme.AppTheme
@@ -33,14 +36,16 @@ fun AttendanceScreen(
     userId: String,
     modifier: Modifier = Modifier
 ) {
-    val state         by viewModel.state.collectAsState()
-    val targetPct     by viewModel.targetPct.collectAsState()
-    val semEndDate    by viewModel.semEndDate.collectAsState()
-    val futureClasses by viewModel.futureClasses.collectAsState()
+    val state              by viewModel.state.collectAsState()
+    val targetPct          by viewModel.targetPct.collectAsState()
+    val semEndDate         by viewModel.semEndDate.collectAsState()
+    val futureClasses      by viewModel.futureClasses.collectAsState()
+    val availableSemesters by viewModel.availableSemesters.collectAsState()
+    val selectedSemester   by viewModel.selectedSemester.collectAsState()
     val c = AppTheme.colors
 
-    var showDatePicker   by remember { mutableStateOf(false) }
-    var sliderValue      by remember(targetPct) { mutableFloatStateOf(targetPct) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var sliderValue    by remember(targetPct) { mutableFloatStateOf(targetPct) }
 
     LaunchedEffect(userId) { viewModel.load(userId) }
 
@@ -90,6 +95,41 @@ fun AttendanceScreen(
             }
         }
 
+        if (availableSemesters.size > 1) {
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                availableSemesters.forEach { sem ->
+                    val isSelected = sem.batchClassId == selectedSemester?.batchClassId
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) c.foreground else c.card)
+                            .border(
+                                1.dp,
+                                if (isSelected) c.foreground else c.border,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { viewModel.selectSemester(sem) }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text       = sem.className,
+                            fontSize   = 13.sp,
+                            fontFamily = Inter,
+                            fontWeight = FontWeight.SemiBold,
+                            color      = if (isSelected) c.background else c.foreground
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -100,7 +140,6 @@ fun AttendanceScreen(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier          = Modifier.fillMaxWidth()
@@ -114,16 +153,16 @@ fun AttendanceScreen(
                     modifier   = Modifier.width(48.dp)
                 )
                 Slider(
-                    value         = sliderValue,
-                    onValueChange = { sliderValue = it },
+                    value                 = sliderValue,
+                    onValueChange         = { sliderValue = it },
                     onValueChangeFinished = { viewModel.setTargetPct(sliderValue) },
-                    valueRange    = 50f..100f,
-                    steps         = 49,
-                    modifier      = Modifier.weight(1f),
-                    colors        = SliderDefaults.colors(
-                        thumbColor          = c.foreground,
-                        activeTrackColor    = c.foreground,
-                        inactiveTrackColor  = c.border
+                    valueRange            = 50f..100f,
+                    steps                 = 49,
+                    modifier              = Modifier.weight(1f),
+                    colors                = SliderDefaults.colors(
+                        thumbColor         = c.foreground,
+                        activeTrackColor   = c.foreground,
+                        inactiveTrackColor = c.border
                     )
                 )
                 Text(
@@ -157,7 +196,7 @@ fun AttendanceScreen(
                         .border(1.dp, c.border, RoundedCornerShape(8.dp))
                         .clickable { showDatePicker = true }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
@@ -227,10 +266,10 @@ fun AttendanceScreen(
                 ) {
                     items(state.subjects) { subject ->
                         SubjectAttendanceCard(
-                            subject        = subject,
-                            targetPct      = targetPct,
-                            semEndDate     = semEndDate,
-                            futureSlots    = futureClasses[subject.subjectCode] ?: -1
+                            subject     = subject,
+                            targetPct   = targetPct,
+                            semEndDate  = semEndDate,
+                            futureSlots = futureClasses[subject.subjectCode] ?: -1
                         )
                     }
                 }
@@ -246,9 +285,9 @@ private fun SemesterEndDatePicker(
     onConfirm: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val c           = AppTheme.colors
-    val initialMs   = if (currentEpochMs > 0L) currentEpochMs else System.currentTimeMillis()
-    val dateState   = rememberDatePickerState(initialSelectedDateMillis = initialMs)
+    val c         = AppTheme.colors
+    val initialMs = if (currentEpochMs > 0L) currentEpochMs else System.currentTimeMillis()
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = initialMs)
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -270,21 +309,21 @@ private fun SemesterEndDatePicker(
             DatePicker(
                 state  = dateState,
                 colors = DatePickerDefaults.colors(
-                    containerColor              = c.card,
-                    titleContentColor           = c.mutedFg,
-                    headlineContentColor        = c.foreground,
-                    weekdayContentColor         = c.dimFg,
-                    subheadContentColor         = c.mutedFg,
-                    navigationContentColor      = c.foreground,
-                    yearContentColor            = c.foreground,
-                    currentYearContentColor     = c.green,
-                    selectedYearContentColor    = c.background,
-                    selectedYearContainerColor  = c.foreground,
-                    dayContentColor             = c.foreground,
-                    selectedDayContentColor     = c.background,
-                    selectedDayContainerColor   = c.foreground,
-                    todayContentColor           = c.green,
-                    todayDateBorderColor        = c.green
+                    containerColor             = c.card,
+                    titleContentColor          = c.mutedFg,
+                    headlineContentColor       = c.foreground,
+                    weekdayContentColor        = c.dimFg,
+                    subheadContentColor        = c.mutedFg,
+                    navigationContentColor     = c.foreground,
+                    yearContentColor           = c.foreground,
+                    currentYearContentColor    = c.green,
+                    selectedYearContentColor   = c.background,
+                    selectedYearContainerColor = c.foreground,
+                    dayContentColor            = c.foreground,
+                    selectedDayContentColor    = c.background,
+                    selectedDayContainerColor  = c.foreground,
+                    todayContentColor          = c.green,
+                    todayDateBorderColor       = c.green
                 )
             )
 
@@ -294,11 +333,7 @@ private fun SemesterEndDatePicker(
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text(
-                        "Cancel",
-                        fontFamily = Inter,
-                        color      = c.dimFg
-                    )
+                    Text("Cancel", fontFamily = Inter, color = c.dimFg)
                 }
                 Spacer(Modifier.width(8.dp))
                 TextButton(
@@ -361,15 +396,12 @@ private fun SubjectAttendanceCard(
             when {
                 needed <= 0 ->
                     null to c.green
-
                 futureSlots >= 0 -> when {
-
                     attended + futureSlots < ((total + futureSlots) * targetPct / 100f).toInt() + 1 ->
                         "You're cooked — need $needed, only $futureSlots classes left" to c.red
                     else ->
                         "Need $needed of $futureSlots remaining classes" to c.yellow
                 }
-
                 else ->
                     "Need $needed more to hit ${targetPct.toInt()}%" to c.yellow
             }
@@ -378,7 +410,6 @@ private fun SubjectAttendanceCard(
 
     ShadcnCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-
             Box(
                 modifier = Modifier
                     .size(52.dp)
@@ -437,13 +468,13 @@ private fun SubjectAttendanceCard(
 
                 if (adviceText != null) {
                     Text(
-                        text     = adviceText,
-                        fontSize = 11.sp,
+                        text       = adviceText,
+                        fontSize   = 11.sp,
                         fontFamily = Inter,
                         fontWeight = if (adviceColor == c.red) FontWeight.SemiBold
                                      else FontWeight.Normal,
-                        color    = adviceColor,
-                        modifier = Modifier.padding(top = 5.dp)
+                        color      = adviceColor,
+                        modifier   = Modifier.padding(top = 5.dp)
                     )
                 }
             }

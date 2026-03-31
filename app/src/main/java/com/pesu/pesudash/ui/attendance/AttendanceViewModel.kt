@@ -2,7 +2,9 @@ package com.pesu.pesudash.ui.attendance
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.pesu.pesudash.data.local.SessionStore
+import com.pesu.pesudash.data.model.AttendanceSemester
 import com.pesu.pesudash.data.model.AttendanceSubject
 import com.pesu.pesudash.data.model.CalendarEvent
 import com.pesu.pesudash.data.model.TimetableEntry
@@ -24,10 +26,10 @@ class AttendanceViewModel(
     private val sessionStore: SessionStore? = null
 ) : ViewModel() {
 
-    private val _state      = MutableStateFlow(AttendanceUiState())
+    private val _state = MutableStateFlow(AttendanceUiState())
     val state: StateFlow<AttendanceUiState> = _state
 
-    private val _targetPct  = MutableStateFlow(75f)
+    private val _targetPct = MutableStateFlow(75f)
     val targetPct: StateFlow<Float> = _targetPct
 
     private val _semEndDate = MutableStateFlow(0L)
@@ -36,8 +38,15 @@ class AttendanceViewModel(
     private val _futureClasses = MutableStateFlow<Map<String, Int>>(emptyMap())
     val futureClasses: StateFlow<Map<String, Int>> = _futureClasses
 
-    private var loaded   = false
-    private var userId   = ""
+    private val _availableSemesters = MutableStateFlow<List<AttendanceSemester>>(emptyList())
+    val availableSemesters: StateFlow<List<AttendanceSemester>> = _availableSemesters
+
+    private val _selectedSemester = MutableStateFlow<AttendanceSemester?>(null)
+    val selectedSemester: StateFlow<AttendanceSemester?> = _selectedSemester
+
+    private val gson = Gson()
+    private var loaded = false
+    private var userId = ""
 
     init {
         viewModelScope.launch {
@@ -53,22 +62,37 @@ class AttendanceViewModel(
         viewModelScope.launch {
             _state.value = AttendanceUiState(isLoading = true)
             try {
-                val subjects  = repository.getAttendanceSummary(uid)
-                val overall   = if (subjects.isNotEmpty())
-                    subjects.mapNotNull { it.percentage }.sum() / subjects.size
-                else 0f
+                val allSemesters = repository.getAttendanceSemestersFull(uid)
+                    .sortedByDescending { it.batchClassOrder }
 
-                _state.value = AttendanceUiState(
-                    isLoading         = false,
-                    subjects          = subjects.sortedBy { it.percentage },
-                    overallPercentage = overall
-                )
+                _availableSemesters.value = allSemesters
 
-                recomputeFuture(uid)
+                val savedSem = loadSavedSemester(allSemesters)
+                val activeSem = savedSem ?: allSemesters.firstOrNull()
+                _selectedSemester.value = activeSem
+
+                if (activeSem != null) {
+                    fetchAttendanceForSemester(uid, activeSem)
+                } else {
+                    _state.value = AttendanceUiState(
+                        isLoading = false,
+                        error     = "No semesters found"
+                    )
+                }
 
             } catch (e: Exception) {
                 _state.value = AttendanceUiState(isLoading = false, error = e.message)
             }
+        }
+    }
+
+    fun selectSemester(semester: AttendanceSemester) {
+        if (_selectedSemester.value?.batchClassId == semester.batchClassId) return
+        _selectedSemester.value = semester
+        viewModelScope.launch {
+            sessionStore?.saveSelectedSemester(gson.toJson(semester))
+            sessionStore?.clearAllCaches()
+            fetchAttendanceForSemester(userId, semester)
         }
     }
 
@@ -88,6 +112,37 @@ class AttendanceViewModel(
             sessionStore?.saveSemEndDate(epochMs)
             recomputeFuture(userId)
         }
+    }
+
+    private suspend fun fetchAttendanceForSemester(uid: String, semester: AttendanceSemester) {
+        _state.value = AttendanceUiState(isLoading = true)
+        try {
+            val subjects = repository.getAttendanceSummaryForSemester(uid, semester.batchClassId)
+            val overall  = if (subjects.isNotEmpty())
+                subjects.mapNotNull { it.percentage }.sum() / subjects.size
+            else 0f
+
+            _state.value = AttendanceUiState(
+                isLoading         = false,
+                subjects          = subjects.sortedBy { it.percentage },
+                overallPercentage = overall
+            )
+
+            recomputeFuture(uid)
+
+        } catch (e: Exception) {
+            _state.value = AttendanceUiState(isLoading = false, error = e.message)
+        }
+    }
+
+    private suspend fun loadSavedSemester(
+        allSemesters: List<AttendanceSemester>
+    ): AttendanceSemester? {
+        val json = sessionStore?.getSelectedSemester() ?: return null
+        return try {
+            val saved = gson.fromJson(json, AttendanceSemester::class.java)
+            allSemesters.find { it.batchClassId == saved.batchClassId }
+        } catch (_: Exception) { null }
     }
 
     private suspend fun recomputeFuture(uid: String) {
@@ -125,7 +180,6 @@ fun computeFutureClasses(
     val holidayDates = mutableSetOf<String>()
     for (event in calendarEvents) {
         if (event.isHoliday != 1) continue
-
         val start = Calendar.getInstance().apply { timeInMillis = event.startDate }
         val end   = Calendar.getInstance().apply { timeInMillis = event.endDate }
         val cur   = start.clone() as Calendar
@@ -191,5 +245,5 @@ private fun calendarKey(cal: Calendar): String {
     val y = cal.get(Calendar.YEAR)
     val m = cal.get(Calendar.MONTH) + 1
     val d = cal.get(Calendar.DAY_OF_MONTH)
-    return "$y-${m.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}"
+    return "$y-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}"
 }
